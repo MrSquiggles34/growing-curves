@@ -28,14 +28,24 @@ find_package(OpenGL REQUIRED)
 # Application
 add_executable(growing-curves
     src/main.cpp
+    src/directionField.cpp
+    src/particle.cpp
+    src/curveGrower.cpp
 )
 
+# Include directories
+target_include_directories(growing-curves PRIVATE
+    dependencies
+)
+
+# Link libraries
 target_link_libraries(growing-curves PRIVATE
     glfw
     glad
     OpenGL::GL
 )
 
+# Source directory for shaders
 target_compile_definitions(growing-curves PRIVATE
     SIM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
