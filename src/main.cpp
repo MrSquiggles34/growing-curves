@@ -305,7 +305,7 @@ int main()
 
     double startTime = glfwGetTime();
 
-    while (stepCount < 10000 && !simulation.isFinished())
+    while (stepCount < 100000000 && !simulation.isFinished())
     {
         simulation.step(0.01f);
         ++stepCount;

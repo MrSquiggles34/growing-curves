@@ -41,7 +41,7 @@ glm::vec2 DirectionField::getGridDirection(int x, int y) const
     return directions[y * gridWidth + x];
 }
 
-glm::vec2 DirectionField::getDirection(glm::vec2 position) const
+glm::vec2 DirectionField::getRandomDirection(glm::vec2 position) const
 {
     float gridX = position.x / gridSpacing;
     float gridY = position.y / gridSpacing;
@@ -75,3 +75,78 @@ glm::vec2 DirectionField::getDirection(glm::vec2 position) const
 
     return direction;
 }
+
+
+glm::vec2 DirectionField::getVortexDirection(glm::vec2 position) const
+{
+    // Center of the vortex
+    glm::vec2 center(width * 0.5f, height * 0.5f);
+
+    glm::vec2 offset = position - center;
+
+    // Counterclockwise tangent
+    glm::vec2 direction(offset.y, -offset.x);
+
+    float magnitude = glm::length(direction);
+
+    if (magnitude > 0.0001f)
+    {
+        direction /= magnitude;
+    }
+    else
+    {
+        direction = glm::vec2(0.0f, -1.0f);
+    }
+
+    return direction;
+}
+
+
+
+
+glm::vec2 DirectionField::getVorticesDirection(glm::vec2 position) const
+{
+    const int columns = 4;
+    const int rows = 3;
+
+    float cellWidth = static_cast<float>(width) / columns;
+    float cellHeight = static_cast<float>(height) / rows;
+
+    float closestDistSq = std::numeric_limits<float>::max();
+    glm::vec2 closestCenter(0.0f);
+
+    // Find the nearest vortex center.
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < columns; ++x)
+        {
+            glm::vec2 center(
+                (x + 0.5f) * cellWidth,
+                (y + 0.5f) * cellHeight
+            );
+
+            glm::vec2 offset = position - center;
+            float distSq = glm::dot(offset, offset);
+
+            if (distSq < closestDistSq)
+            {
+                closestDistSq = distSq;
+                closestCenter = center;
+            }
+        }
+    }
+
+    // Counterclockwise direction around the nearest center.
+    glm::vec2 offset = position - closestCenter;
+    glm::vec2 direction(offset.y, -offset.x);
+
+    float magnitude = glm::length(direction);
+
+    if (magnitude > 0.0001f)
+        direction /= magnitude;
+    else
+        direction = glm::vec2(0.0f, -1.0f);
+
+    return direction;
+}
+

@@ -6,7 +6,7 @@
 class OccupancyGrid
 {
 public:
-    OccupancyGrid(int width, int height, int cellSize = 8);
+    OccupancyGrid(int width, int height, int cellSize = 1);
 
     int getOwner(int x, int y) const;
     bool canOccupy(int x, int y, int curveId) const;

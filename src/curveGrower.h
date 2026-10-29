@@ -125,7 +125,7 @@ void CurveGrower::growBranch(
     Particle candidate = particle;
 
     glm::vec2 force =
-        field.getDirection(candidate.getPosition());
+        field.getVorticesDirection(candidate.getPosition());
 
     candidate.update(force, deltaTime);
 

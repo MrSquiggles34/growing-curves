@@ -8,7 +8,9 @@ class DirectionField
 public:
     DirectionField(int width, int height);
 
-    glm::vec2 getDirection(glm::vec2 position) const;
+    glm::vec2 getRandomDirection(glm::vec2 position) const;
+    glm::vec2 getVortexDirection(glm::vec2 position) const;
+    glm::vec2 getVorticesDirection(glm::vec2 position) const;
 
 private:
     int width;
@@ -19,6 +21,7 @@ private:
     int gridHeight;
 
     std::vector<glm::vec2> directions;
+    std::vector<glm::vec2> vortexCenters;
 
     glm::vec2 getGridDirection(int x, int y) const;
 };
