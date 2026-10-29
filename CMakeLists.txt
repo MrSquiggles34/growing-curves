@@ -31,6 +31,9 @@ add_executable(growing-curves
     src/directionField.cpp
     src/particle.cpp
     src/curveGrower.cpp
+    src/distanceMap.cpp
+    src/simulation.cpp
+    src/occupancyGrid.cpp
 )
 
 # Include directories

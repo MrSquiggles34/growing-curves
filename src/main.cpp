@@ -8,11 +8,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include "directionField.h"
 #include "particle.h"
 #include "curveGrower.h"
 #include "straightDirectionField.h"
+#include "distanceMap.h"
+#include "simulation.h"
+#include "occupancyGrid.h"
 
 static std::string readFile(const std::string& path)
 {
@@ -284,28 +288,8 @@ int main()
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, imageWidth, imageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
-    double startTime = glfwGetTime();
-
-
-	// Create a DirectionField instance with a specific direction.
-    glm::vec2 center(128.0f, 128.0f);
-
-    DirectionField field(center);
-
-    std::vector<Curve> existingCurves;
-
-    CurveGrower grower(
-        glm::vec2(100.0f, 128.0f),
-        glm::vec2(1.0f, 0.0f),
-        1.0f,
-        glm::vec2(0.0f, 0.0f),
-        glm::vec2(255.0f, 255.0f));
-
-    // Grow until both ends stop, or until the iteration limit is reached.
-    for (int i = 0; i < 10000; ++i)
-    {
-        grower.growStep(field, 0.01f, existingCurves);
-    }
+    // Start Simulation
+    Simulation simulation(imageWidth, imageHeight);
 
     // Initialize the image to opaque black.
     for (std::size_t i = 0; i < pixels.size(); i += 4)
@@ -316,58 +300,90 @@ int main()
         pixels[i + 3] = 255;
     }
 
-    // Draw previously accepted curves in red.
-    for (const Curve& existingCurve : existingCurves)
+    // Advance the simulation and measure its execution time.
+    int stepCount = 0;
+
+    double startTime = glfwGetTime();
+
+    while (stepCount < 10000 && !simulation.isFinished())
+    {
+        simulation.step(0.01f);
+        ++stepCount;
+    }
+
+    double endTime = glfwGetTime();
+
+    double elapsedMilliseconds = (endTime - startTime) * 1000.0;
+
+    std::cout << "Simulation time: "
+        << elapsedMilliseconds << " ms" << std::endl;
+
+    std::cout << "Simulation steps: "
+        << stepCount << std::endl;
+
+    std::cout << "Simulation finished: "
+        << (simulation.isFinished() ? "yes" : "no")
+        << std::endl;
+
+    // Draw completed curves in red.
+    for (const Curve& curve : simulation.getCurves())
     {
         drawCurve(
             pixels,
             imageWidth,
             imageHeight,
-            existingCurve,
-            255, 60, 60);
+            curve,
+            255, 60, 60
+        );
     }
 
-    // Draw the newly grown curve in white.
-    drawCurve(
-        pixels,
-        imageWidth,
-        imageHeight,
-        grower.getCurve(),
-        255, 255, 255);
+    // Draw the currently growing curve in white, if one exists.
+    const Curve* currentCurve = simulation.getCurrentCurve();
 
-    const Curve& curve = grower.getCurve();
-
-    std::cout << "Points: " << curve.points.size() << '\n';
-    std::cout << "Length: " << curve.length << '\n';
-
-    // Verify that every point remains within the simulation region.
-    bool allPointsInside = true;
-
-    for (const glm::vec2& point : curve.points)
+    if (currentCurve != nullptr)
     {
-        if (point.x < 0.0f || point.x > 255.0f ||
-            point.y < 0.0f || point.y > 255.0f)
-        {
-            std::cout << "ERROR: Point outside region\n";
-            allPointsInside = false;
-        }
+        drawCurve(
+            pixels,
+            imageWidth,
+            imageHeight,
+            *currentCurve,
+            255, 255, 255
+        );
     }
 
-    if (allPointsInside)
-    {
-        std::cout << "Boundary check: PASS\n";
-    }
+    std::cout << "Completed curves: "
+        << simulation.getCurves().size() << '\n';
 
-    // Print the final curve endpoints for inspection.
-    if (!curve.points.empty())
-    {
-        std::cout << "First point: ("
-            << curve.points.front().x << ", "
-            << curve.points.front().y << ")\n";
+    std::cout << "Maximum remaining distance: "
+        << simulation.getMaximumRemainingDistance() << '\n';
 
-        std::cout << "Last point: ("
-            << curve.points.back().x << ", "
-            << curve.points.back().y << ")\n";
+    glm::vec2 start = simulation.getCurrentStartPosition();
+
+    std::cout << "Last starting point: ("
+        << start.x << ", " << start.y << ")\n";
+
+    std::cout << "Simulation finished: "
+        << (simulation.isFinished() ? "YES" : "NO") << '\n';
+
+    std::cout << "Stop reason: ";
+
+    switch (simulation.getStopReason())
+    {
+    case Simulation::StopReason::MinimumDistanceReached:
+        std::cout << "Minimum distance reached\n";
+        break;
+
+    case Simulation::StopReason::MaximumCurvesReached:
+        std::cout << "Maximum curves reached\n";
+        break;
+
+    case Simulation::StopReason::NoValidStartingPoint:
+        std::cout << "No valid starting point\n";
+        break;
+
+    default:
+        std::cout << "Still running or not set\n";
+        break;
     }
 
 

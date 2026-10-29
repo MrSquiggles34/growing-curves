@@ -32,7 +32,9 @@ CurveGrower::CurveGrower(
     glm::vec2 initialDirection,
     float initialSpeed,
     glm::vec2 regionMin,
-    glm::vec2 regionMax)
+    glm::vec2 regionMax,
+    OccupancyGrid* occupancyGrid,
+    int curveId)
     : forwardParticle(
         startPosition,
         validatedDirection(initialDirection)* initialSpeed),
@@ -40,7 +42,9 @@ CurveGrower::CurveGrower(
         startPosition,
         -validatedDirection(initialDirection) * initialSpeed),
     regionMin(regionMin),
-    regionMax(regionMax)
+    regionMax(regionMax),
+    occupancyGrid(occupancyGrid),
+    curveId(curveId)
 {
     if (regionMin.x > regionMax.x ||
         regionMin.y > regionMax.y)
@@ -57,6 +61,16 @@ CurveGrower::CurveGrower(
 
     forwardPoints.push_back(startPosition);
     backwardPoints.push_back(startPosition);
+
+    // Both branches share the starting point.
+    // Register it once for this curve.
+    if (occupancyGrid != nullptr && curveId >= 0)
+    {
+        occupancyGrid->occupy(
+            static_cast<int>(std::round(startPosition.x)),
+            static_cast<int>(std::round(startPosition.y)),
+            curveId);
+    }
 
     rebuildCurve();
 }
@@ -190,4 +204,14 @@ bool CurveGrower::findFirstIntersection(
 
     intersectionT = closestT;
     return foundIntersection;
+}
+
+bool CurveGrower::isFinished() const
+{
+    return !forwardActive && !backwardActive;
+}
+
+void CurveGrower::finalizeCurve()
+{
+    rebuildCurve();
 }
