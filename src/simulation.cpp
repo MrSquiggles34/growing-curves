@@ -10,12 +10,14 @@ Simulation::Simulation(int width, int height)
     height(height),
     directionField(width, height),
     distanceMap(width, height),
-    occupancyGrid(width, height),
+    geometryNetwork(),
+    spatialGrid(width, height, 2.0f),
+    collisionDetector(geometryNetwork, spatialGrid),
     nextCurveId(0),
     randomGenerator(std::random_device{}()),
     initialSpeed(0.1f),
-    minimumDistance(1.0f),
-    maximumCurves(1000),
+    minimumDistance(2.0f),
+    maximumCurves(100),
     finished(false),
     stopReason(StopReason::None),
     maximumRemainingDistance(0.0f),
@@ -55,8 +57,7 @@ void Simulation::step(float deltaTime)
     // Advance both branches of the current curve.
     currentGrower->growStep(
         directionField,
-        deltaTime,
-        curves
+        deltaTime
     );
 
     // Once both branches stop, save the curve and
@@ -80,6 +81,16 @@ const Curve* Simulation::getCurrentCurve() const
     }
 
     return &currentGrower->getCurve();
+}
+
+const GeometryNetwork& Simulation::getGeometryNetwork() const
+{
+    return geometryNetwork;
+}
+
+const CollisionDetector& Simulation::getCollisionDetector() const
+{
+	return collisionDetector;
 }
 
 bool Simulation::isFinished() const
@@ -179,7 +190,7 @@ bool Simulation::startNextCurve()
             static_cast<float>(width - 1),
             static_cast<float>(height - 1)
         ),
-        &occupancyGrid,
+        &collisionDetector,
         nextCurveId++
     );
 
@@ -191,8 +202,42 @@ void Simulation::finishCurrentCurve()
     // Store the completed curve before destroying its grower.
     currentGrower->finalizeCurve();
 
-    curves.push_back(currentGrower->getCurve());
+    // Remember where this curve's edges will begin.
+    EdgeId firstNewEdge = geometryNetwork.getEdgeCount();
 
+    // Add the curve to the authoritative geometry network.
+    geometryNetwork.addPolyline(
+        currentGrower->getCurve().points,
+        currentGrower->getCurveId()
+    );
+
+    // Insert only the newly added edges into the spatial grid.
+    EdgeId lastNewEdge = geometryNetwork.getEdgeCount();
+
+    for (EdgeId edgeId = firstNewEdge;
+        edgeId < lastNewEdge;
+        edgeId++)
+    {
+        spatialGrid.insertEdge(geometryNetwork, edgeId);
+    }
+
+    /*
+    std::cout << "Finished curve "
+        << currentGrower->getCurveId()
+        << " | Points: "
+        << currentGrower->getCurve().points.size()
+        << " | Length: "
+        << currentGrower->getCurve().length
+        << std::endl;
+
+    std::cout << "Network vertices: "
+        << geometryNetwork.getVertexCount()
+        << " | Edges: "
+        << geometryNetwork.getEdgeCount()
+        << std::endl;
+        */
+
+    curves.push_back(currentGrower->getCurve());
     currentGrower.reset();
 
     // Stop if we have reached the curve limit or the
@@ -231,3 +276,4 @@ glm::vec2 Simulation::getCurrentStartPosition() const
 {
     return currentStartPosition;
 }
+

@@ -33,7 +33,7 @@ CurveGrower::CurveGrower(
     float initialSpeed,
     glm::vec2 regionMin,
     glm::vec2 regionMax,
-    OccupancyGrid* occupancyGrid,
+    CollisionDetector* collisionDetector,
     int curveId)
     : forwardParticle(
         startPosition,
@@ -43,7 +43,7 @@ CurveGrower::CurveGrower(
         -validatedDirection(initialDirection) * initialSpeed),
     regionMin(regionMin),
     regionMax(regionMax),
-    occupancyGrid(occupancyGrid),
+    collisionDetector(collisionDetector),
     curveId(curveId)
 {
     if (regionMin.x > regionMax.x ||
@@ -61,16 +61,6 @@ CurveGrower::CurveGrower(
 
     forwardPoints.push_back(startPosition);
     backwardPoints.push_back(startPosition);
-
-    // Both branches share the starting point.
-    // Register it once for this curve.
-    if (occupancyGrid != nullptr && curveId >= 0)
-    {
-        occupancyGrid->occupy(
-            static_cast<int>(std::round(startPosition.x)),
-            static_cast<int>(std::round(startPosition.y)),
-            curveId);
-    }
 
     rebuildCurve();
 }
@@ -150,60 +140,9 @@ const Curve& CurveGrower::getCurve() const
     return curve;
 }
 
-bool CurveGrower::findFirstIntersection(
-    glm::vec2 start,
-    glm::vec2 end,
-    const std::vector<Curve>& existingCurves,
-    glm::vec2& intersection,
-    float& intersectionT) const
+int CurveGrower::getCurveId() const
 {
-    glm::vec2 movement = end - start;
-
-    bool foundIntersection = false;
-    float closestT = 1.0f;
-
-    const float epsilon = 0.000001f;
-
-    for (const Curve& existingCurve : existingCurves)
-    {
-        for (std::size_t i = 1;
-            i < existingCurve.points.size();
-            ++i)
-        {
-            glm::vec2 a = existingCurve.points[i - 1];
-            glm::vec2 b = existingCurve.points[i];
-
-            glm::vec2 segment = b - a;
-            glm::vec2 offset = a - start;
-
-            float denominator = cross2D(movement, segment);
-
-            // Parallel and collinear segments are not handled here.
-            if (std::abs(denominator) < epsilon)
-            {
-                continue;
-            }
-
-            float t = cross2D(offset, segment) / denominator;
-            float u = cross2D(offset, movement) / denominator;
-
-            if (t < 0.0f || t > 1.0f ||
-                u < 0.0f || u > 1.0f)
-            {
-                continue;
-            }
-
-            if (!foundIntersection || t < closestT)
-            {
-                closestT = t;
-                intersection = start + t * movement;
-                foundIntersection = true;
-            }
-        }
-    }
-
-    intersectionT = closestT;
-    return foundIntersection;
+    return curveId;
 }
 
 bool CurveGrower::isFinished() const

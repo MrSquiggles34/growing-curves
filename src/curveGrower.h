@@ -4,7 +4,7 @@
 #include "Curve.h"
 #include "DirectionField.h"
 #include "Particle.h"
-#include "occupancyGrid.h"
+#include "geometry/collisionDetector.h"
 
 #include <glm/vec2.hpp>
 #include <glm/geometric.hpp>
@@ -21,16 +21,17 @@ public:
         float initialSpeed = 1.0f,
         glm::vec2 regionMin = glm::vec2(0.0f, 0.0f),
         glm::vec2 regionMax = glm::vec2(255.0f, 255.0f),
-        OccupancyGrid* occupancyGrid = nullptr,
+        CollisionDetector* collisionDetector = nullptr,
         int curveId = -1);
 
     template <typename Field>
     void growStep(
         const Field& field,
-        float deltaTime,
-        const std::vector<Curve>& existingCurves);
+        float deltaTime);
 
     const Curve& getCurve() const;
+    int getCurveId() const;
+
     bool isFinished() const;
 
     void finalizeCurve();
@@ -48,7 +49,7 @@ private:
     glm::vec2 regionMin;
     glm::vec2 regionMax;
 
-    OccupancyGrid* occupancyGrid;
+    CollisionDetector* collisionDetector;
     int curveId;
 
     bool forwardActive = true;
@@ -60,12 +61,6 @@ private:
         glm::vec2 start,
         glm::vec2 end) const;
 
-    bool findFirstIntersection(
-        glm::vec2 start,
-        glm::vec2 end,
-        const std::vector<Curve>& existingCurves,
-        glm::vec2& intersection,
-        float& intersectionT) const;
 
     template <typename Field>
     void growBranch(
@@ -73,8 +68,7 @@ private:
         std::vector<glm::vec2>& points,
         bool& active,
         const Field& field,
-        float deltaTime,
-        const std::vector<Curve>& existingCurves);
+        float deltaTime);
 
     void rebuildCurve();
 };
@@ -85,24 +79,21 @@ private:
 template <typename Field>
 void CurveGrower::growStep(
     const Field& field,
-    float deltaTime,
-    const std::vector<Curve>& existingCurves)
+    float deltaTime)
 {
     growBranch(
         forwardParticle,
         forwardPoints,
         forwardActive,
         field,
-        deltaTime,
-        existingCurves);
+        deltaTime);
 
     growBranch(
         backwardParticle,
         backwardPoints,
         backwardActive,
         field,
-        deltaTime,
-        existingCurves);
+        deltaTime);
 }
 
 
@@ -113,15 +104,13 @@ void CurveGrower::growBranch(
     std::vector<glm::vec2>& points,
     bool& active,
     const Field& field,
-    float deltaTime,
-    const std::vector<Curve>& existingCurves)
+    float deltaTime)
 {
     if (!active)
     {
         return;
     }
 
-    // Predict the next position without committing it yet.
     Particle candidate = particle;
 
     glm::vec2 force =
@@ -132,42 +121,17 @@ void CurveGrower::growBranch(
     glm::vec2 start = particle.getPosition();
     glm::vec2 end = candidate.getPosition();
 
-    // Check for intersection with an existing curve.
-    /*
-    glm::vec2 intersection(0.0f);
-    float intersectionT = 1.0f;
-
-    bool hitCurve = findFirstIntersection(
-        start,
-        end,
-        existingCurves,
-        intersection,
-        intersectionT);
-        */
-
     // Check whether the movement crosses the region boundary.
     bool hitBoundary = !isInsideRegion(end);
 
-    float boundaryT = 1.0f;
     glm::vec2 boundaryPosition(0.0f);
 
     if (hitBoundary)
     {
         boundaryPosition = clipToBoundary(start, end);
-
-        glm::vec2 movement = end - start;
-        float movementLengthSquared =
-            glm::dot(movement, movement);
-
-        if (movementLengthSquared > 0.0f)
-        {
-            boundaryT = glm::dot(
-                boundaryPosition - start,
-                movement) / movementLengthSquared;
-        }
     }
 
-    // Select the first geometric stopping point.
+    // Select the furthest position allowed by the region boundary.
     glm::vec2 target = end;
 
     if (hitBoundary)
@@ -175,31 +139,35 @@ void CurveGrower::growBranch(
         target = boundaryPosition;
     }
 
-    // Check every sampled cell between the current position
-    // and the selected target.
-    if (occupancyGrid != nullptr && curveId >= 0)
+    // Check the proposed movement against existing capsules.
+    if (collisionDetector != nullptr && curveId >= 0)
     {
-        glm::vec2 lastValidPosition;
+        bool hitCollision = collisionDetector->wouldCollide(
+            start,
+            target,
+            1.0f,
+            curveId
+        );
 
-        bool hitOccupiedCell =
-            occupancyGrid->findFirstBlockedPoint(
-                start,
-                target,
-                curveId,
-                lastValidPosition);
-
-        if (hitOccupiedCell)
+        if (hitCollision)
         {
-            // Claim the valid portion of this segment.
-            occupancyGrid->occupySegment(
-                start,
-                lastValidPosition,
-                curveId);
+            glm::vec2 lastSafePosition =
+                collisionDetector->findLastSafePosition(
+                    start,
+                    target,
+                    1.0f,
+                    curveId
+                );
 
-            points.push_back(lastValidPosition);
+            // Only append a point if the branch actually moved.
+            if (glm::distance(start, lastSafePosition) > 0.0001f)
+            {
+                points.push_back(lastSafePosition);
+            }
+
             active = false;
 
-            std::cout << "Occupancy collision from ("
+            std::cout << "Capsule collision from ("
                 << start.x << ", " << start.y
                 << ") before ("
                 << target.x << ", " << target.y
@@ -209,15 +177,7 @@ void CurveGrower::growBranch(
         }
     }
 
-    // Register the accepted portion of this movement.
-    if (occupancyGrid != nullptr && curveId >= 0)
-    {
-        occupancyGrid->occupySegment(
-            start,
-            target,
-            curveId);
-    }
-
+    // No collision: handle the boundary or accept the full movement.
     if (hitBoundary)
     {
         points.push_back(boundaryPosition);

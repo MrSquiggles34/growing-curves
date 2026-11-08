@@ -5,6 +5,9 @@
 #include "directionField.h"
 #include "distanceMap.h"
 #include "occupancyGrid.h"
+#include "geometry/geometryNetwork.h"
+#include "geometry/collisionDetector.h"
+#include "geometry/spatialGrid.h"
 
 #include <glm/vec2.hpp>
 #include <memory>
@@ -28,12 +31,15 @@ public:
 
     const std::vector<Curve>& getCurves() const;
     const Curve* getCurrentCurve() const;
+    const GeometryNetwork& getGeometryNetwork() const;
+    const CollisionDetector& getCollisionDetector() const;
 
     bool isFinished() const;
 
     StopReason getStopReason() const;
     float getMaximumRemainingDistance() const;
     glm::vec2 getCurrentStartPosition() const;
+
 
 private:
     int width;
@@ -42,8 +48,10 @@ private:
     DirectionField directionField;
     DistanceMap distanceMap;
 
-    // Occupancy grid
-    OccupancyGrid occupancyGrid;
+    GeometryNetwork geometryNetwork;
+    SpatialGrid spatialGrid;
+    CollisionDetector collisionDetector;
+
     int nextCurveId;
 
     std::vector<Curve> curves;

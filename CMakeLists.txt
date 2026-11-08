@@ -34,6 +34,10 @@ add_executable(growing-curves
     src/distanceMap.cpp
     src/simulation.cpp
     src/occupancyGrid.cpp
+    src/geometry/geometryNetwork.cpp
+    src/geometry/segmentGeometry.cpp
+    src/geometry/collisionDetector.cpp
+    src/geometry/spatialGrid.cpp
 )
 
 # Include directories

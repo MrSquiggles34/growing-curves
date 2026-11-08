@@ -17,6 +17,12 @@
 #include "distanceMap.h"
 #include "simulation.h"
 #include "occupancyGrid.h"
+#include "geometry/geometryNetwork.h"
+#include "geometry/segmentGeometry.h"
+#include "geometry/collisionDetector.h"
+
+
+
 
 static std::string readFile(const std::string& path)
 {
@@ -386,6 +392,38 @@ int main()
         break;
     }
 
+    const GeometryNetwork& network = simulation.getGeometryNetwork();
+
+    std::cout << "Network vertices: "
+        << network.getVertexCount() << '\n';
+
+    std::cout << "Network edges: "
+        << network.getEdgeCount() << '\n';
+
+    std::cout << "\n--- Collision Statistics ---" << std::endl;
+
+    std::cout << "Collision queries: "
+        << simulation.getCollisionDetector().getTotalCollisionQueries()
+        << std::endl;
+
+    std::cout << "Candidate edges: "
+        << simulation.getCollisionDetector().getTotalCandidateEdges()
+        << std::endl;
+
+    std::cout << "Exact intersection tests: "
+        << simulation.getCollisionDetector().getTotalIntersectionTests()
+        << std::endl;
+
+    if (simulation.getCollisionDetector().getTotalCollisionQueries() > 0)
+    {
+        double averageCandidates =
+            static_cast<double>(simulation.getCollisionDetector().getTotalCandidateEdges()) /
+            simulation.getCollisionDetector().getTotalCollisionQueries();
+
+        std::cout << "Average candidates per query: "
+            << averageCandidates
+            << std::endl;
+    }
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
