@@ -5,6 +5,24 @@
 
 #include <glm/vec2.hpp>
 
+struct CollisionResult
+{
+    bool collided = false;
+
+    bool hasEdge = false;
+
+    EdgeId edgeId = 0;
+
+    // Last safe position of the growing curve.
+    glm::vec2 safePosition;
+
+    // Position on the existing edge's centerline.
+    glm::vec2 edgePosition;
+
+    // Position along the existing edge, from 0.0 to 1.0.
+    float edgeParameter = 0.0f;
+};
+
 class CollisionDetector
 {
 public:
@@ -22,6 +40,13 @@ public:
     ) const;
 
     glm::vec2 findLastSafePosition(
+        const glm::vec2& start,
+        const glm::vec2& end,
+        float radius,
+        int curveId
+    ) const;
+
+    CollisionResult findCollision(
         const glm::vec2& start,
         const glm::vec2& end,
         float radius,

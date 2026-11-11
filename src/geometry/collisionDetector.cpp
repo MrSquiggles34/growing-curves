@@ -2,7 +2,38 @@
 #include "segmentGeometry.h"
 
 #include <glm/common.hpp>
+#include <algorithm>
+#include <limits>
+#include <glm/geometric.hpp>
 
+namespace
+{
+    float closestPointOnSegment(
+        const glm::vec2& point,
+        const glm::vec2& start,
+        const glm::vec2& end,
+        glm::vec2& closestPoint)
+    {
+        glm::vec2 segment = end - start;
+
+        float segmentLengthSquared = glm::dot(segment, segment);
+
+        if (segmentLengthSquared <= 0.000001f)
+        {
+            closestPoint = start;
+            return 0.0f;
+        }
+
+        float t = glm::dot(point - start, segment)
+            / segmentLengthSquared;
+
+        t = std::clamp(t, 0.0f, 1.0f);
+
+        closestPoint = start + t * segment;
+
+        return t;
+    }
+}
 
 CollisionDetector::CollisionDetector(
     const GeometryNetwork& network,
@@ -104,6 +135,99 @@ glm::vec2 CollisionDetector::findLastSafePosition(
     safeT = glm::clamp(safeT, 0.0f, 1.0f);
 
     return glm::mix(start, end, safeT);
+}
+
+CollisionResult CollisionDetector::findCollision(
+    const glm::vec2& start,
+    const glm::vec2& end,
+    float radius,
+    int curveId) const
+{
+    CollisionResult result;
+
+    // First, check whether this movement actually collides.
+    if (!wouldCollide(start, end, radius, curveId))
+    {
+        return result;
+    }
+
+    result.collided = true;
+
+    // Find the last safe position before the collision.
+    result.safePosition = findLastSafePosition(
+        start,
+        end,
+        radius,
+        curveId
+    );
+
+    // Retrieve nearby edges using the spatial grid.
+    std::vector<EdgeId> candidates =
+        spatialGrid.getCandidateEdges(start, end, radius);
+
+    float closestDistanceSquared =
+        std::numeric_limits<float>::max();
+
+    EdgeId closestEdgeId = 0;
+    glm::vec2 closestEdgePosition(0.0f);
+    float closestEdgeParameter = 0.0f;
+
+    // Find the existing edge closest to the safe position.
+    for (EdgeId edgeId : candidates)
+    {
+        const Edge& edge = network.getEdge(edgeId);
+
+        if (edge.curveId == curveId)
+        {
+            continue;
+        }
+
+        const glm::vec2& edgeStart =
+            network.getVertex(edge.startVertex).position;
+
+        const glm::vec2& edgeEnd =
+            network.getVertex(edge.endVertex).position;
+
+        glm::vec2 pointOnEdge;
+
+        float edgeParameter = closestPointOnSegment(
+            result.safePosition,
+            edgeStart,
+            edgeEnd,
+            pointOnEdge
+        );
+
+        glm::vec2 difference =
+            result.safePosition - pointOnEdge;
+
+        float distanceSquared = glm::dot(
+            difference,
+            difference
+        );
+
+        if (distanceSquared < closestDistanceSquared)
+        {
+            closestDistanceSquared = distanceSquared;
+
+            closestEdgeId = edgeId;
+            closestEdgePosition = pointOnEdge;
+            closestEdgeParameter = edgeParameter;
+        }
+    }
+
+    if (closestDistanceSquared == std::numeric_limits<float>::max())
+    {
+        result.collided = false;
+        return result;
+    }
+
+    result.hasEdge = true;
+
+    result.edgeId = closestEdgeId;
+    result.edgePosition = closestEdgePosition;
+    result.edgeParameter = closestEdgeParameter;
+
+    return result;
 }
 
 std::size_t CollisionDetector::getTotalCandidateEdges() const

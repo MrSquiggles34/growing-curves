@@ -311,7 +311,7 @@ int main()
 
     double startTime = glfwGetTime();
 
-    while (stepCount < 100000000 && !simulation.isFinished())
+    while (stepCount < 10000000000 && !simulation.isFinished())
     {
         simulation.step(0.01f);
         ++stepCount;
@@ -392,6 +392,7 @@ int main()
         break;
     }
 
+    /*
     const GeometryNetwork& network = simulation.getGeometryNetwork();
 
     std::cout << "Network vertices: "
@@ -424,6 +425,76 @@ int main()
             << averageCandidates
             << std::endl;
     }
+    */
+    const GeometryNetwork& network = simulation.getGeometryNetwork();
+
+    std::string error;
+
+    std::cout << "\n--- Geometry Network Validation ---\n";
+
+    std::cout << "Vertices: "
+        << network.getVertexCount() << "\n";
+
+    std::cout << "Edges: "
+        << network.getEdgeCount() << "\n";
+
+    if (network.validate(error))
+    {
+        std::cout << "Network validation: PASS\n";
+
+        if (network.validate(error))
+        {
+            GraphStatistics statistics = network.calculateStatistics();
+
+            std::cout << "\n--- Graph Topology Statistics ---\n";
+
+            std::cout << "Connected components: "
+                << statistics.connectedComponents << "\n";
+
+            std::cout << "\nVertex Degree Distribution:\n";
+
+            std::cout << "Isolated vertices (degree 0): "
+                << statistics.isolatedVertices << "\n";
+
+            std::cout << "Endpoints (degree 1): "
+                << statistics.degree1Vertices << "\n";
+
+            std::cout << "Regular vertices (degree 2): "
+                << statistics.degree2Vertices << "\n";
+
+            std::cout << "Junctions (degree 3+): "
+                << statistics.degree3OrMoreVertices << "\n";
+
+            std::cout << "Maximum degree: "
+                << statistics.maximumDegree << "\n";
+
+            std::cout << "\nIndependent cycles: "
+                << statistics.independentCycles << "\n";
+
+            std::cout << "\nComponent Size Distribution:\n";
+
+            for (std::size_t i = 0; i < statistics.components.size(); i++)
+            {
+                const GraphComponentStatistics& component =
+                    statistics.components[i];
+
+                std::cout << "Component " << i
+                    << " | Vertices: " << component.vertexCount
+                    << " | Edges: " << component.edgeCount
+                    << "\n";
+            }
+        }
+
+
+    }
+    else
+    {
+        std::cout << "Network validation: FAIL\n";
+        std::cout << "Reason: " << error << "\n";
+    }
+
+
+
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();

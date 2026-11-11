@@ -135,6 +135,7 @@ void CurveGrower::rebuildCurve()
     }
 }
 
+
 const Curve& CurveGrower::getCurve() const
 {
     return curve;
@@ -143,6 +144,26 @@ const Curve& CurveGrower::getCurve() const
 int CurveGrower::getCurveId() const
 {
     return curveId;
+}
+
+const CollisionResult& CurveGrower::getForwardCollision() const
+{
+    return forwardCollision;
+}
+
+const CollisionResult& CurveGrower::getBackwardCollision() const
+{
+    return backwardCollision;
+}
+
+BranchStopReason CurveGrower::getForwardStopReason() const
+{
+    return forwardStopReason;
+}
+
+BranchStopReason CurveGrower::getBackwardStopReason() const
+{
+    return backwardStopReason;
 }
 
 bool CurveGrower::isFinished() const

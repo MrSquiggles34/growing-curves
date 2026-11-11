@@ -5,6 +5,47 @@
 #include <random>
 #include <stdexcept>
 
+namespace
+{
+    VertexId registerCollision(
+        GeometryNetwork& network,
+        SpatialGrid& grid,
+        const CollisionResult& collision)
+    {
+        const Edge& edge = network.getEdge(collision.edgeId);
+
+        const float epsilon = 0.0001f;
+
+        // If the collision is already at an endpoint,
+        // reuse that vertex instead of splitting the edge.
+        if (collision.edgeParameter <= epsilon)
+        {
+            return edge.startVertex;
+        }
+
+        if (collision.edgeParameter >= 1.0f - epsilon)
+        {
+            return edge.endVertex;
+        }
+
+        // Split the existing edge at the collision position.
+        VertexId newVertex = network.splitEdge(
+            collision.edgeId,
+            collision.edgePosition
+        );
+
+        // The original edge has changed, and a new edge was added.
+        // Register both with the spatial grid.
+        grid.insertEdge(network, collision.edgeId);
+
+        EdgeId newEdgeId = network.getEdgeCount() - 1;
+
+        grid.insertEdge(network, newEdgeId);
+
+        return newVertex;
+    }
+}
+
 Simulation::Simulation(int width, int height)
     : width(width),
     height(height),
@@ -16,7 +57,7 @@ Simulation::Simulation(int width, int height)
     nextCurveId(0),
     randomGenerator(std::random_device{}()),
     initialSpeed(0.1f),
-    minimumDistance(2.0f),
+    minimumDistance(1.0f),
     maximumCurves(100),
     finished(false),
     stopReason(StopReason::None),
@@ -199,19 +240,255 @@ bool Simulation::startNextCurve()
 
 void Simulation::finishCurrentCurve()
 {
-    // Store the completed curve before destroying its grower.
     currentGrower->finalizeCurve();
 
-    // Remember where this curve's edges will begin.
+    const Curve& completedCurve = currentGrower->getCurve();
+
+    if (completedCurve.points.size() < 2)
+    {
+        std::cout << "Rejected curve: insufficient points."
+            << std::endl;
+
+        currentGrower.reset();
+
+        if (!startNextCurve())
+        {
+            if (stopReason == StopReason::None)
+            {
+                stopReason = StopReason::NoValidStartingPoint;
+            }
+
+            finished = true;
+        }
+
+        return;
+    }
+
+    const CollisionResult& forwardCollision =
+        currentGrower->getForwardCollision();
+
+    const CollisionResult& backwardCollision =
+        currentGrower->getBackwardCollision();
+
+    bool hasForwardCollision =
+        forwardCollision.collided && forwardCollision.hasEdge;
+
+    bool hasBackwardCollision =
+        backwardCollision.collided && backwardCollision.hasEdge;
+
+
+    // Checking
+    BranchStopReason forwardReason =
+        currentGrower->getForwardStopReason();
+
+    BranchStopReason backwardReason =
+        currentGrower->getBackwardStopReason();
+
+    std::cout << "\n--- Curve " << currentGrower->getCurveId()
+        << " ---\n";
+
+    std::cout << "Forward stop reason: "
+        << static_cast<int>(forwardReason) << "\n";
+
+    std::cout << "Backward stop reason: "
+        << static_cast<int>(backwardReason) << "\n";
+
+    std::cout << "Forward collision: "
+        << hasForwardCollision << "\n";
+
+    std::cout << "Backward collision: "
+        << hasBackwardCollision << "\n";
+
+    std::cout << "Existing edges: "
+        << geometryNetwork.getEdgeCount() << "\n";
+
+    //// The first curve establishes the initial geometry.
+    //// Every subsequent curve must connect to existing geometry.
+    //bool isFirstCurve = curves.empty();
+
+    //bool hasConnection =
+    //    hasForwardCollision || hasBackwardCollision;
+
+    //if (!isFirstCurve && !hasConnection)
+    //{
+    //    std::cout << "Rejected curve: no connection to existing geometry."
+    //        << std::endl;
+
+    //    currentGrower.reset();
+
+    //    if (!startNextCurve())
+    //    {
+    //        if (stopReason == StopReason::None)
+    //        {
+    //            stopReason = StopReason::NoValidStartingPoint;
+    //        }
+
+    //        finished = true;
+    //    }
+
+    //    return;
+    //}
+
+
+    bool useStartVertex = false;
+    bool useEndVertex = false;
+
+    VertexId startVertex = 0;
+    VertexId endVertex = 0;
+
+    VertexId forwardVertex = 0;
+    VertexId backwardVertex = 0;
+
+    // Resolve collision vertices.
+    if (hasForwardCollision && hasBackwardCollision)
+    {
+        if (forwardCollision.edgeId == backwardCollision.edgeId)
+        {
+            float distance = glm::distance(
+                forwardCollision.edgePosition,
+                backwardCollision.edgePosition
+            );
+
+            if (distance < 0.0001f)
+            {
+                // Both branches reached the same location.
+                forwardVertex = registerCollision(
+                    geometryNetwork,
+                    spatialGrid,
+                    forwardCollision
+                );
+
+                backwardVertex = forwardVertex;
+            }
+            else if (forwardCollision.edgeParameter >
+                backwardCollision.edgeParameter)
+            {
+                forwardVertex = registerCollision(
+                    geometryNetwork,
+                    spatialGrid,
+                    forwardCollision
+                );
+
+                backwardVertex = registerCollision(
+                    geometryNetwork,
+                    spatialGrid,
+                    backwardCollision
+                );
+            }
+            else
+            {
+                backwardVertex = registerCollision(
+                    geometryNetwork,
+                    spatialGrid,
+                    backwardCollision
+                );
+
+                forwardVertex = registerCollision(
+                    geometryNetwork,
+                    spatialGrid,
+                    forwardCollision
+                );
+            }
+        }
+        else
+        {
+            forwardVertex = registerCollision(
+                geometryNetwork,
+                spatialGrid,
+                forwardCollision
+            );
+
+            backwardVertex = registerCollision(
+                geometryNetwork,
+                spatialGrid,
+                backwardCollision
+            );
+        }
+    }
+    else if (hasForwardCollision)
+    {
+        forwardVertex = registerCollision(
+            geometryNetwork,
+            spatialGrid,
+            forwardCollision
+        );
+    }
+    else if (hasBackwardCollision)
+    {
+        backwardVertex = registerCollision(
+            geometryNetwork,
+            spatialGrid,
+            backwardCollision
+        );
+    }
+
+    // Determine which endpoint belongs to each collision.
+    if (hasForwardCollision)
+    {
+        float startDistance = glm::distance(
+            completedCurve.points.front(),
+            forwardCollision.edgePosition
+        );
+
+        float endDistance = glm::distance(
+            completedCurve.points.back(),
+            forwardCollision.edgePosition
+        );
+
+        if (startDistance < endDistance)
+        {
+            useStartVertex = true;
+            startVertex = forwardVertex;
+        }
+        else
+        {
+            useEndVertex = true;
+            endVertex = forwardVertex;
+        }
+    }
+
+    if (hasBackwardCollision)
+    {
+        float startDistance = glm::distance(
+            completedCurve.points.front(),
+            backwardCollision.edgePosition
+        );
+
+        float endDistance = glm::distance(
+            completedCurve.points.back(),
+            backwardCollision.edgePosition
+        );
+
+        if (startDistance < endDistance)
+        {
+            useStartVertex = true;
+            startVertex = backwardVertex;
+        }
+        else
+        {
+            useEndVertex = true;
+            endVertex = backwardVertex;
+        }
+    }
+
+    if (hasForwardCollision || hasBackwardCollision)
+    {
+        std::cout << "Curve connected to existing geometry." << std::endl;
+    }
+
+    // Register the curve with its existing collision vertices.
     EdgeId firstNewEdge = geometryNetwork.getEdgeCount();
 
-    // Add the curve to the authoritative geometry network.
-    geometryNetwork.addPolyline(
-        currentGrower->getCurve().points,
-        currentGrower->getCurveId()
+    geometryNetwork.addPolylineWithEndpoints(
+        completedCurve.points,
+        currentGrower->getCurveId(),
+        useStartVertex,
+        startVertex,
+        useEndVertex,
+        endVertex
     );
 
-    // Insert only the newly added edges into the spatial grid.
+    // Register the new curve edges in the spatial grid.
     EdgeId lastNewEdge = geometryNetwork.getEdgeCount();
 
     for (EdgeId edgeId = firstNewEdge;
@@ -221,27 +498,9 @@ void Simulation::finishCurrentCurve()
         spatialGrid.insertEdge(geometryNetwork, edgeId);
     }
 
-    /*
-    std::cout << "Finished curve "
-        << currentGrower->getCurveId()
-        << " | Points: "
-        << currentGrower->getCurve().points.size()
-        << " | Length: "
-        << currentGrower->getCurve().length
-        << std::endl;
-
-    std::cout << "Network vertices: "
-        << geometryNetwork.getVertexCount()
-        << " | Edges: "
-        << geometryNetwork.getEdgeCount()
-        << std::endl;
-        */
-
-    curves.push_back(currentGrower->getCurve());
+    curves.push_back(completedCurve);
     currentGrower.reset();
 
-    // Stop if we have reached the curve limit or the
-    // remaining gaps are too small.
     if (static_cast<int>(curves.size()) >= maximumCurves)
     {
         stopReason = StopReason::MaximumCurvesReached;

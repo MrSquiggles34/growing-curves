@@ -12,6 +12,13 @@
 #include <iostream>
 #include <vector>
 
+enum class BranchStopReason
+{
+    None,
+    EdgeCollision,
+    BoundaryReached
+};
+
 class CurveGrower
 {
 public:
@@ -31,6 +38,12 @@ public:
 
     const Curve& getCurve() const;
     int getCurveId() const;
+
+    const CollisionResult& getForwardCollision() const;
+    const CollisionResult& getBackwardCollision() const;
+
+    BranchStopReason getForwardStopReason() const;
+    BranchStopReason getBackwardStopReason() const;
 
     bool isFinished() const;
 
@@ -52,6 +65,12 @@ private:
     CollisionDetector* collisionDetector;
     int curveId;
 
+    CollisionResult forwardCollision;
+    CollisionResult backwardCollision;
+
+    BranchStopReason forwardStopReason = BranchStopReason::None;
+    BranchStopReason backwardStopReason = BranchStopReason::None;
+
     bool forwardActive = true;
     bool backwardActive = true;
 
@@ -68,7 +87,9 @@ private:
         std::vector<glm::vec2>& points,
         bool& active,
         const Field& field,
-        float deltaTime);
+        float deltaTime,
+        CollisionResult& collisionResult,
+        BranchStopReason& stopReason);
 
     void rebuildCurve();
 };
@@ -86,14 +107,20 @@ void CurveGrower::growStep(
         forwardPoints,
         forwardActive,
         field,
-        deltaTime);
+        deltaTime,
+        forwardCollision,
+		forwardStopReason
+    );
 
     growBranch(
         backwardParticle,
         backwardPoints,
         backwardActive,
         field,
-        deltaTime);
+        deltaTime,
+        backwardCollision,
+		backwardStopReason
+    );
 }
 
 
@@ -104,7 +131,9 @@ void CurveGrower::growBranch(
     std::vector<glm::vec2>& points,
     bool& active,
     const Field& field,
-    float deltaTime)
+    float deltaTime,
+    CollisionResult& collisionResult,
+    BranchStopReason& stopReason)
 {
     if (!active)
     {
@@ -142,35 +171,35 @@ void CurveGrower::growBranch(
     // Check the proposed movement against existing capsules.
     if (collisionDetector != nullptr && curveId >= 0)
     {
-        bool hitCollision = collisionDetector->wouldCollide(
+        CollisionResult result = collisionDetector->findCollision(
             start,
             target,
             1.0f,
             curveId
         );
 
-        if (hitCollision)
+        if (result.collided)
         {
-            glm::vec2 lastSafePosition =
-                collisionDetector->findLastSafePosition(
-                    start,
-                    target,
-                    1.0f,
-                    curveId
-                );
+            collisionResult = result;
 
-            // Only append a point if the branch actually moved.
-            if (glm::distance(start, lastSafePosition) > 0.0001f)
+            stopReason = BranchStopReason::EdgeCollision;
+
+            if (result.hasEdge)
             {
-                points.push_back(lastSafePosition);
+                points.push_back(result.edgePosition);
+            }
+            else
+            {
+                points.push_back(result.safePosition);
             }
 
             active = false;
 
-            std::cout << "Capsule collision from ("
-                << start.x << ", " << start.y
-                << ") before ("
-                << target.x << ", " << target.y
+            std::cout << "Collision with edge "
+                << result.edgeId
+                << " at ("
+                << result.edgePosition.x << ", "
+                << result.edgePosition.y
                 << ")\n";
 
             return;
@@ -181,6 +210,9 @@ void CurveGrower::growBranch(
     if (hitBoundary)
     {
         points.push_back(boundaryPosition);
+
+        stopReason = BranchStopReason::BoundaryReached;
+
         active = false;
     }
     else
