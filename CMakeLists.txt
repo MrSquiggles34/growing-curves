@@ -38,6 +38,7 @@ add_executable(growing-curves
     src/geometry/segmentGeometry.cpp
     src/geometry/collisionDetector.cpp
     src/geometry/spatialGrid.cpp
+    src/imageDirectionField.cpp
 )
 
 # Include directories

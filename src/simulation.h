@@ -8,6 +8,7 @@
 #include "geometry/geometryNetwork.h"
 #include "geometry/collisionDetector.h"
 #include "geometry/spatialGrid.h"
+#include "imageDirectionField.h"
 
 #include <glm/vec2.hpp>
 #include <memory>
@@ -46,7 +47,10 @@ private:
     int height;
 
     DirectionField directionField;
+    ImageDirectionField imageDirectionField;
     DistanceMap distanceMap;
+
+    float imageInfluence;
 
     GeometryNetwork geometryNetwork;
     SpatialGrid spatialGrid;

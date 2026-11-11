@@ -50,13 +50,15 @@ Simulation::Simulation(int width, int height)
     : width(width),
     height(height),
     directionField(width, height),
+    imageDirectionField(),
     distanceMap(width, height),
+    imageInfluence(1.0f),
     geometryNetwork(),
     spatialGrid(width, height, 2.0f),
     collisionDetector(geometryNetwork, spatialGrid),
     nextCurveId(0),
     randomGenerator(std::random_device{}()),
-    initialSpeed(0.1f),
+    initialSpeed(9.0f),
     minimumDistance(1.0f),
     maximumCurves(100),
     finished(false),
@@ -69,6 +71,13 @@ Simulation::Simulation(int width, int height)
         throw std::invalid_argument(
             "Simulation dimensions must be positive."
         );
+    }
+
+    // Load the image used to guide particle movement.
+    if (!imageDirectionField.loadImage("test.png"))
+    {
+        std::cout << "Warning: Image guidance disabled."
+            << std::endl;
     }
 
     startNextCurve();
@@ -98,7 +107,9 @@ void Simulation::step(float deltaTime)
     // Advance both branches of the current curve.
     currentGrower->growStep(
         directionField,
-        deltaTime
+        deltaTime,
+        &imageDirectionField,
+        imageInfluence
     );
 
     // Once both branches stop, save the curve and
@@ -275,59 +286,6 @@ void Simulation::finishCurrentCurve()
 
     bool hasBackwardCollision =
         backwardCollision.collided && backwardCollision.hasEdge;
-
-
-    // Checking
-    BranchStopReason forwardReason =
-        currentGrower->getForwardStopReason();
-
-    BranchStopReason backwardReason =
-        currentGrower->getBackwardStopReason();
-
-    std::cout << "\n--- Curve " << currentGrower->getCurveId()
-        << " ---\n";
-
-    std::cout << "Forward stop reason: "
-        << static_cast<int>(forwardReason) << "\n";
-
-    std::cout << "Backward stop reason: "
-        << static_cast<int>(backwardReason) << "\n";
-
-    std::cout << "Forward collision: "
-        << hasForwardCollision << "\n";
-
-    std::cout << "Backward collision: "
-        << hasBackwardCollision << "\n";
-
-    std::cout << "Existing edges: "
-        << geometryNetwork.getEdgeCount() << "\n";
-
-    //// The first curve establishes the initial geometry.
-    //// Every subsequent curve must connect to existing geometry.
-    //bool isFirstCurve = curves.empty();
-
-    //bool hasConnection =
-    //    hasForwardCollision || hasBackwardCollision;
-
-    //if (!isFirstCurve && !hasConnection)
-    //{
-    //    std::cout << "Rejected curve: no connection to existing geometry."
-    //        << std::endl;
-
-    //    currentGrower.reset();
-
-    //    if (!startNextCurve())
-    //    {
-    //        if (stopReason == StopReason::None)
-    //        {
-    //            stopReason = StopReason::NoValidStartingPoint;
-    //        }
-
-    //        finished = true;
-    //    }
-
-    //    return;
-    //}
 
 
     bool useStartVertex = false;

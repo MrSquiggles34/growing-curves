@@ -5,6 +5,7 @@
 #include "DirectionField.h"
 #include "Particle.h"
 #include "geometry/collisionDetector.h"
+#include "imageDirectionField.h"
 
 #include <glm/vec2.hpp>
 #include <glm/geometric.hpp>
@@ -34,7 +35,9 @@ public:
     template <typename Field>
     void growStep(
         const Field& field,
-        float deltaTime);
+        float deltaTime,
+        const ImageDirectionField* imageField = nullptr,
+        float imageInfluence = 0.5f);
 
     const Curve& getCurve() const;
     int getCurveId() const;
@@ -89,7 +92,9 @@ private:
         const Field& field,
         float deltaTime,
         CollisionResult& collisionResult,
-        BranchStopReason& stopReason);
+        BranchStopReason& stopReason,
+        const ImageDirectionField* imageField,
+        float imageInfluence);
 
     void rebuildCurve();
 };
@@ -100,7 +105,9 @@ private:
 template <typename Field>
 void CurveGrower::growStep(
     const Field& field,
-    float deltaTime)
+    float deltaTime,
+    const ImageDirectionField* imageField,
+    float imageInfluence)
 {
     growBranch(
         forwardParticle,
@@ -109,7 +116,9 @@ void CurveGrower::growStep(
         field,
         deltaTime,
         forwardCollision,
-		forwardStopReason
+        forwardStopReason,
+        imageField,
+        imageInfluence
     );
 
     growBranch(
@@ -119,7 +128,9 @@ void CurveGrower::growStep(
         field,
         deltaTime,
         backwardCollision,
-		backwardStopReason
+        backwardStopReason,
+        imageField,
+        imageInfluence
     );
 }
 
@@ -133,7 +144,9 @@ void CurveGrower::growBranch(
     const Field& field,
     float deltaTime,
     CollisionResult& collisionResult,
-    BranchStopReason& stopReason)
+    BranchStopReason& stopReason,
+    const ImageDirectionField* imageField,
+    float imageInfluence)
 {
     if (!active)
     {
@@ -142,8 +155,19 @@ void CurveGrower::growBranch(
 
     Particle candidate = particle;
 
-    glm::vec2 force =
+    glm::vec2 simulationDirection =
         field.getVorticesDirection(candidate.getPosition());
+
+    glm::vec2 force = simulationDirection;
+
+    if (imageField != nullptr)
+    {
+        force = imageField->blendDirection(
+            simulationDirection,
+            candidate.getPosition(),
+            imageInfluence
+        );
+    }
 
     candidate.update(force, deltaTime);
 

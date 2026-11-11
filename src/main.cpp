@@ -1,6 +1,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "../dependencies/stb_image.h"
+
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -9,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <filesystem>
 
 #include "directionField.h"
 #include "particle.h"
@@ -20,6 +24,7 @@
 #include "geometry/geometryNetwork.h"
 #include "geometry/segmentGeometry.h"
 #include "geometry/collisionDetector.h"
+#include "imageDirectionField.h"
 
 
 
@@ -153,6 +158,88 @@ void drawCurve(
             r, g, b);
     }
 }
+
+void testImageLoading()
+{
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+
+    unsigned char* image = stbi_load(
+        "test.png",
+        &width,
+        &height,
+        &channels,
+        0
+    );
+
+    if (image == nullptr)
+    {
+        std::cout << "Failed to load image!" << std::filesystem::current_path() <<std::endl;
+        std::cout << stbi_failure_reason() << std::endl;
+        return;
+    }
+
+    std::cout << "--- Image Loading Test ---" << std::endl;
+    std::cout << "Width: " << width << std::endl;
+    std::cout << "Height: " << height << std::endl;
+    std::cout << "Channels: " << channels << std::endl;
+
+    // Print the first pixel's RGB values.
+    std::cout << "First pixel: ";
+
+    for (int i = 0; i < channels; ++i)
+    {
+        std::cout << static_cast<int>(image[i]) << " ";
+    }
+
+    std::cout << std::endl;
+
+    stbi_image_free(image);
+
+    std::cout << "Image loading successful!" << std::endl;
+}
+
+
+
+void testImageDirectionField()
+{
+    ImageDirectionField imageField;
+
+    if (!imageField.loadImage("test.png"))
+    {
+        std::cout << "Image direction field test failed."
+            << std::endl;
+        return;
+    }
+
+    glm::vec2 testPosition(128.0f, 128.0f);
+    glm::vec2 currentDirection(1.0f, 0.0f);
+
+    glm::vec2 direction = imageField.getDirection(
+        testPosition,
+        currentDirection
+    );
+
+    float strength = imageField.getStrength(testPosition);
+
+    std::cout << "\n--- Image Direction Field Test ---"
+        << std::endl;
+
+    std::cout << "Image dimensions: "
+        << imageField.getWidth() << " x "
+        << imageField.getHeight() << std::endl;
+
+    std::cout << "Direction: ("
+        << direction.x << ", "
+        << direction.y << ")" << std::endl;
+
+    std::cout << "Edge strength: "
+        << strength << std::endl;
+
+    imageField.printStrongestEdge();
+}
+
 
 static GLuint createProgram()
 {
@@ -293,6 +380,10 @@ int main()
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, imageWidth, imageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+    // Image loading
+	testImageLoading();
+	testImageDirectionField();
 
     // Start Simulation
     Simulation simulation(imageWidth, imageHeight);
