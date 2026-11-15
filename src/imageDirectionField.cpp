@@ -134,6 +134,8 @@ void ImageDirectionField::calculateGradients()
             magnitude /= maximumMagnitude;
         }
     }
+
+    smoothDirections(4, 2);
 }
 
 glm::vec2 ImageDirectionField::getDirection(
@@ -150,13 +152,13 @@ glm::vec2 ImageDirectionField::getDirection(
     x = std::clamp(x, 0, width - 1);
     y = std::clamp(y, 0, height - 1);
 
-    glm::vec2 tangent = directions[getIndex(x, y)];
+    glm::vec2 tangent = smoothedDirections[getIndex(x, y)];
 
     if (glm::length(tangent) < 0.0001f)
         return currentDirection;
 
     // Resolve the tangent's directional ambiguity.
-    if (glm::dot(tangent, currentDirection) < 0.0f)
+    if (glm::dot(tangent, currentDirection) <= 0.0f)
     {
         tangent = -tangent;
     }
@@ -259,4 +261,178 @@ glm::vec2 ImageDirectionField::blendDirection(
     }
 
     return simulationDirection;
+}
+
+void ImageDirectionField::smoothDirections(
+    int radius,
+    int iterations)
+{
+    if (width <= 0 || height <= 0)
+        return;
+
+    smoothedDirections = directions;
+
+    const float spatialSigma = 2.0f;
+    const float orientationSigma = 0.3f;
+
+    for (int iteration = 0; iteration < iterations; ++iteration)
+    {
+        std::vector<glm::vec2> nextDirections(
+            width * height,
+            glm::vec2(0.0f)
+        );
+
+        for (int y = 0; y < height; ++y)
+        {
+            for (int x = 0; x < width; ++x)
+            {
+                int centerIndex = getIndex(x, y);
+
+                glm::vec2 centerDirection =
+                    smoothedDirections[centerIndex];
+
+                // Find a reference direction.
+                // If the center has no valid tangent, use the
+                // strongest edge in its neighborhood.
+                if (glm::length(centerDirection) < 0.0001f)
+                {
+                    float strongestMagnitude = 0.0f;
+
+                    for (int offsetY = -radius;
+                        offsetY <= radius; ++offsetY)
+                    {
+                        for (int offsetX = -radius;
+                            offsetX <= radius; ++offsetX)
+                        {
+                            int sampleX = x + offsetX;
+                            int sampleY = y + offsetY;
+
+                            if (sampleX < 0 || sampleX >= width ||
+                                sampleY < 0 || sampleY >= height)
+                            {
+                                continue;
+                            }
+
+                            int sampleIndex = getIndex(
+                                sampleX,
+                                sampleY
+                            );
+
+                            if (magnitudes[sampleIndex] >
+                                strongestMagnitude)
+                            {
+                                strongestMagnitude =
+                                    magnitudes[sampleIndex];
+
+                                centerDirection =
+                                    smoothedDirections[sampleIndex];
+                            }
+                        }
+                    }
+                }
+
+                if (glm::length(centerDirection) < 0.0001f)
+                {
+                    nextDirections[centerIndex] =
+                        glm::vec2(0.0f);
+
+                    continue;
+                }
+
+                centerDirection = glm::normalize(centerDirection);
+
+                glm::vec2 accumulatedDirection(0.0f);
+                float totalWeight = 0.0f;
+
+                for (int offsetY = -radius;
+                    offsetY <= radius; ++offsetY)
+                {
+                    for (int offsetX = -radius;
+                        offsetX <= radius; ++offsetX)
+                    {
+                        int sampleX = x + offsetX;
+                        int sampleY = y + offsetY;
+
+                        if (sampleX < 0 || sampleX >= width ||
+                            sampleY < 0 || sampleY >= height)
+                        {
+                            continue;
+                        }
+
+                        int sampleIndex = getIndex(
+                            sampleX,
+                            sampleY
+                        );
+
+                        glm::vec2 sampleDirection =
+                            smoothedDirections[sampleIndex];
+
+                        float sampleLength =
+                            glm::length(sampleDirection);
+
+                        if (sampleLength < 0.0001f)
+                            continue;
+
+                        sampleDirection /= sampleLength;
+
+                        // Tangents are unoriented. Align neighboring
+                        // vectors before accumulating them.
+                        float alignment = glm::dot(
+                            centerDirection,
+                            sampleDirection
+                        );
+
+                        if (alignment < 0.0f)
+                        {
+                            sampleDirection = -sampleDirection;
+                            alignment = -alignment;
+                        }
+
+                        float distanceSquared =
+                            static_cast<float>(
+                                offsetX * offsetX +
+                                offsetY * offsetY
+                                );
+
+                        float spatialWeight = std::exp(
+                            -distanceSquared /
+                            (2.0f * spatialSigma * spatialSigma)
+                        );
+
+                        float orientationDifference =
+                            1.0f - alignment;
+
+                        float orientationWeight = std::exp(
+                            -(orientationDifference *
+                                orientationDifference) /
+                            (2.0f * orientationSigma *
+                                orientationSigma)
+                        );
+
+                        float weight =
+                            spatialWeight * orientationWeight;
+
+                        accumulatedDirection +=
+                            sampleDirection * weight;
+
+                        totalWeight += weight;
+                    }
+                }
+
+                if (totalWeight > 0.0001f &&
+                    glm::length(accumulatedDirection) > 0.0001f)
+                {
+                    nextDirections[centerIndex] =
+                        glm::normalize(accumulatedDirection);
+                }
+                else
+                {
+                    nextDirections[centerIndex] =
+                        centerDirection;
+                }
+            }
+        }
+
+        smoothedDirections = nextDirections;
+    }
 }

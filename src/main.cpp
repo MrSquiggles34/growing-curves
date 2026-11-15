@@ -25,6 +25,7 @@
 #include "geometry/segmentGeometry.h"
 #include "geometry/collisionDetector.h"
 #include "imageDirectionField.h"
+#include "renderer.h"
 
 
 
@@ -387,6 +388,7 @@ int main()
 
     // Start Simulation
     Simulation simulation(imageWidth, imageHeight);
+    Renderer renderer(program, imageWidth, imageHeight);
 
     // Initialize the image to opaque black.
     for (std::size_t i = 0; i < pixels.size(); i += 4)
@@ -421,32 +423,6 @@ int main()
     std::cout << "Simulation finished: "
         << (simulation.isFinished() ? "yes" : "no")
         << std::endl;
-
-    // Draw completed curves in red.
-    for (const Curve& curve : simulation.getCurves())
-    {
-        drawCurve(
-            pixels,
-            imageWidth,
-            imageHeight,
-            curve,
-            255, 60, 60
-        );
-    }
-
-    // Draw the currently growing curve in white, if one exists.
-    const Curve* currentCurve = simulation.getCurrentCurve();
-
-    if (currentCurve != nullptr)
-    {
-        drawCurve(
-            pixels,
-            imageWidth,
-            imageHeight,
-            *currentCurve,
-            255, 255, 255
-        );
-    }
 
     std::cout << "Completed curves: "
         << simulation.getCurves().size() << '\n';

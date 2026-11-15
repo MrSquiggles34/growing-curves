@@ -105,12 +105,7 @@ void Simulation::step(float deltaTime)
     }
 
     // Advance both branches of the current curve.
-    currentGrower->growStep(
-        directionField,
-        deltaTime,
-        &imageDirectionField,
-        imageInfluence
-    );
+    currentGrower->growStep(imageDirectionField, deltaTime);
 
     // Once both branches stop, save the curve and
     // prepare the next starting point.
@@ -236,15 +231,14 @@ bool Simulation::startNextCurve()
     currentGrower = std::make_unique<CurveGrower>(
         startPosition,
         initialDirection,
-        initialSpeed,
         glm::vec2(0.0f, 0.0f),
-        glm::vec2(
-            static_cast<float>(width - 1),
-            static_cast<float>(height - 1)
-        ),
+        glm::vec2(static_cast<float>(width - 1),
+            static_cast<float>(height - 1)),
         &collisionDetector,
         nextCurveId++
     );
+
+    currentGrower->setForceUpdateInterval(400);
 
     return true;
 }

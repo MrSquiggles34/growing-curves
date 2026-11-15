@@ -39,10 +39,13 @@ private:
 
     std::vector<float> grayscale;
     std::vector<glm::vec2> directions;
+    std::vector<glm::vec2> smoothedDirections;
     std::vector<float> magnitudes;
 
     int getIndex(int x, int y) const;
 
     void calculateGradients();
+
+    void smoothDirections(int radius, int iterations);
 
 };

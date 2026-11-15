@@ -30,21 +30,21 @@ namespace
 CurveGrower::CurveGrower(
     glm::vec2 startPosition,
     glm::vec2 initialDirection,
-    float initialSpeed,
     glm::vec2 regionMin,
     glm::vec2 regionMax,
     CollisionDetector* collisionDetector,
     int curveId)
-    : forwardParticle(
-        startPosition,
-        validatedDirection(initialDirection)* initialSpeed),
-    backwardParticle(
-        startPosition,
-        -validatedDirection(initialDirection) * initialSpeed),
+    : forwardParticle(startPosition),
+    backwardParticle(startPosition),
     regionMin(regionMin),
     regionMax(regionMax),
     collisionDetector(collisionDetector),
-    curveId(curveId)
+    curveId(curveId),
+    forwardForceDirection(validatedDirection(initialDirection)),
+    backwardForceDirection(-validatedDirection(initialDirection)),
+    forwardForceUpdateCounter(0),
+    backwardForceUpdateCounter(0),
+    forceUpdateInterval(400)
 {
     if (regionMin.x > regionMax.x ||
         regionMin.y > regionMax.y)
@@ -135,6 +135,161 @@ void CurveGrower::rebuildCurve()
     }
 }
 
+void CurveGrower::growBranch(
+    Particle& particle,
+    std::vector<glm::vec2>& points,
+    bool& active,
+    const ImageDirectionField& imageField,
+    float deltaTime,
+    CollisionResult& collisionResult,
+    BranchStopReason& stopReason,
+    glm::vec2& forceDirection,
+    int& forceUpdateCounter)
+{
+    if (!active)
+    {
+        return;
+    }
+
+    // Periodically update the force direction from the image.
+    if (forceUpdateCounter == 0)
+    {
+        forceDirection = imageField.getDirection(
+            particle.getPosition(),
+            forceDirection
+        );
+    }
+
+    // Advance the force update timer.
+    ++forceUpdateCounter;
+
+    if (forceUpdateCounter >= forceUpdateInterval)
+    {
+        forceUpdateCounter = 0;
+    }
+
+    Particle candidate = particle;
+
+    // The image tangent is the only source of force.
+    candidate.update(forceDirection, deltaTime);
+
+    glm::vec2 start = particle.getPosition();
+    glm::vec2 end = candidate.getPosition();
+
+    // Check whether the movement crosses the region boundary.
+    bool hitBoundary = !isInsideRegion(end);
+
+    glm::vec2 boundaryPosition(0.0f);
+
+    if (hitBoundary)
+    {
+        boundaryPosition = clipToBoundary(start, end);
+    }
+
+    // Select the furthest position allowed by the region boundary.
+    glm::vec2 target = end;
+
+    if (hitBoundary)
+    {
+        target = boundaryPosition;
+    }
+
+    // Check the proposed movement against existing capsules.
+    if (collisionDetector != nullptr && curveId >= 0)
+    {
+        CollisionResult result = collisionDetector->findCollision(
+            start,
+            target,
+            1.0f,
+            curveId
+        );
+
+        if (result.collided)
+        {
+            collisionResult = result;
+
+            stopReason = BranchStopReason::EdgeCollision;
+
+            if (result.hasEdge)
+            {
+                points.push_back(result.edgePosition);
+            }
+            else
+            {
+                points.push_back(result.safePosition);
+            }
+
+            active = false;
+
+            std::cout << "Collision with edge "
+                << result.edgeId
+                << " at ("
+                << result.edgePosition.x << ", "
+                << result.edgePosition.y
+                << ")\n";
+
+            return;
+        }
+    }
+
+    // No collision: handle the boundary or accept the full movement.
+    if (hitBoundary)
+    {
+        points.push_back(boundaryPosition);
+
+        stopReason = BranchStopReason::BoundaryReached;
+
+        active = false;
+    }
+    else
+    {
+        particle = candidate;
+        points.push_back(end);
+    }
+}
+
+void CurveGrower::growStep(
+    const ImageDirectionField& imageField,
+    float deltaTime)
+{
+    growBranch(
+        forwardParticle,
+        forwardPoints,
+        forwardActive,
+        imageField,
+        deltaTime,
+        forwardCollision,
+        forwardStopReason,
+        forwardForceDirection,
+        forwardForceUpdateCounter
+    );
+
+    growBranch(
+        backwardParticle,
+        backwardPoints,
+        backwardActive,
+        imageField,
+        deltaTime,
+        backwardCollision,
+        backwardStopReason,
+        backwardForceDirection,
+        backwardForceUpdateCounter
+    );
+}
+
+void CurveGrower::setForceUpdateInterval(int interval)
+{
+    if (interval <= 0)
+    {
+        throw std::invalid_argument(
+            "Force update interval must be positive.");
+    }
+
+    forceUpdateInterval = interval;
+
+    forwardForceUpdateCounter = 0;
+    backwardForceUpdateCounter = 0;
+}
 
 const Curve& CurveGrower::getCurve() const
 {
