@@ -9,6 +9,7 @@
 #include "geometry/collisionDetector.h"
 #include "geometry/spatialGrid.h"
 #include "imageDirectionField.h"
+#include "imageStippler.h"
 
 #include <glm/vec2.hpp>
 #include <memory>
@@ -55,6 +56,7 @@ private:
     GeometryNetwork geometryNetwork;
     SpatialGrid spatialGrid;
     CollisionDetector collisionDetector;
+    ImageStippler imageStippler;
 
     int nextCurveId;
 

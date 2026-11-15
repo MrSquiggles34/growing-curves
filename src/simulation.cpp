@@ -60,7 +60,7 @@ Simulation::Simulation(int width, int height)
     randomGenerator(std::random_device{}()),
     initialSpeed(9.0f),
     minimumDistance(1.0f),
-    maximumCurves(100),
+    maximumCurves(300),
     finished(false),
     stopReason(StopReason::None),
     maximumRemainingDistance(0.0f),
@@ -188,40 +188,39 @@ bool Simulation::startNextCurve()
         return false;
     }
 
+    // Update distances to include all completed curves.
+    distanceMap.update(curves);
+
+    // Find the largest remaining distance.
+    // This is used to determine whether enough space remains.
+    glm::vec2 farthestPoint = distanceMap.findFarthestPoint();
+
+    maximumRemainingDistance = distanceMap.getDistance(
+        static_cast<int>(farthestPoint.x),
+        static_cast<int>(farthestPoint.y)
+    );
+
+    if (maximumRemainingDistance < minimumDistance)
+    {
+        stopReason = StopReason::MinimumDistanceReached;
+        return false;
+    }
+
+    // Select a structure-aware starting position.
     glm::vec2 startPosition;
 
-    if (curves.empty())
+    bool foundPosition = imageStippler.selectPosition(
+        imageDirectionField,
+        distanceMap,
+        minimumDistance,
+        randomGenerator,
+        startPosition
+    );
+
+    if (!foundPosition)
     {
-        // The first curve starts at a random position.
-        startPosition = generateRandomPosition();
-    }
-    else
-    {
-        // Later curves start in the largest remaining gap.
-        distanceMap.update(curves);
-
-        startPosition = distanceMap.findFarthestPoint();
-
-        maximumRemainingDistance = distanceMap.getDistance(
-            static_cast<int>(startPosition.x),
-            static_cast<int>(startPosition.y)
-        );
-
-        float remainingDistance = distanceMap.getDistance(
-            static_cast<int>(startPosition.x),
-            static_cast<int>(startPosition.y)
-        );
-
-        if (maximumRemainingDistance < minimumDistance)
-        {
-            stopReason = StopReason::MinimumDistanceReached;
-            return false;
-        }
-
-        if (remainingDistance < minimumDistance)
-        {
-            return false;
-        }
+        stopReason = StopReason::NoValidStartingPoint;
+        return false;
     }
 
     currentStartPosition = startPosition;
@@ -232,13 +231,19 @@ bool Simulation::startNextCurve()
         startPosition,
         initialDirection,
         glm::vec2(0.0f, 0.0f),
-        glm::vec2(static_cast<float>(width - 1),
-            static_cast<float>(height - 1)),
+        glm::vec2(
+            static_cast<float>(width - 1),
+            static_cast<float>(height - 1)
+        ),
         &collisionDetector,
         nextCurveId++
     );
 
-    currentGrower->setForceUpdateInterval(400);
+    currentGrower->setForceUpdateInterval(100);
+
+    std::cout << "Starting curve " << nextCurveId - 1
+        << " at (" << startPosition.x
+        << ", " << startPosition.y << ")\n";
 
     return true;
 }

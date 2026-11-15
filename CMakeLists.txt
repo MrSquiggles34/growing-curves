@@ -40,6 +40,7 @@ add_executable(growing-curves
     src/geometry/spatialGrid.cpp
     src/imageDirectionField.cpp
     src/renderer.cpp
+    src/imageStippler.cpp
 )
 
 # Include directories

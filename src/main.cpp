@@ -247,8 +247,8 @@ static GLuint createProgram()
     const std::string root = SIM_SOURCE_DIR;
 
 	// Compile shaders.
-    GLuint vertex = compileShader(GL_VERTEX_SHADER, readFile(root + "/shaders/texture.vert"));
-    GLuint fragment = compileShader(GL_FRAGMENT_SHADER, readFile(root + "/shaders/texture.frag"));
+    GLuint vertex = compileShader(GL_VERTEX_SHADER, readFile(root + "/shaders/geometry.vert"));
+    GLuint fragment = compileShader(GL_FRAGMENT_SHADER, readFile(root + "/shaders/geometry.frag"));
 
 	// Delete shaders if compilation failed.
     if (!vertex || !fragment) {
@@ -585,13 +585,10 @@ int main()
         glClearColor(0.04f, 0.04f, 0.05f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUseProgram(program);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
-
-        glBindVertexArray(vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+        renderer.render(
+            simulation.getGeometryNetwork(),
+            glm::vec3(1.0f, 0.2f, 0.2f)
+        );
 
         glfwSwapBuffers(window);
     }
